@@ -1,11 +1,13 @@
 This is a mirror of http://www.vim.org/scripts/script.php?script_id=1563
 
-The Patch Review plugin allows single or multipatch code or diff reviews to be done in VIM.
+The Patch Review plugin allows easy single or multipatch code or diff reviews.
 
-It opens each affected file in the patch or workspace diff in a diff view in a separate Tab.
+It opens each affected (modified/added/deleted) file in the patch or in a version controlled workspace diff in a diff view in a separate tab.
 
-VIM provides the :diffpatch command to do single file reviews but can not handle patch files containing multiple patches as is common with software development projects.  This plugin provides that missing functionality. 
+VIM provides the :diffpatch command to do single file reviews but can not handle patch files containing multiple patches as is common with software development projects.  This plugin provides that missing functionality.
 
-It also improves on :diffpatch's behaviour of creating the patched files in the same directory as original file which leads to project workspace pollution.
+It also does not pollute the workspace like :diffpatch does by writing files in the workspace.
 
-(Keywords: codereview, codereviews, code review, patch, patchutils, diff, diffpatch, patchreview, patchreviews, patch review, vcs, scm, mercurial, bazaar, hg, bzr, cvs, monotone, mtn, git)
+It does automatic diff generation for various version control systems by running their respective diff commands.
+
+(Keywords: codereview, codereviews, code review, patch, patchutils, diff, diffpatch, patchreview, patchreviews, patch review, vcs, scm, mercurial, bazaar, hg, bzr, cvs, monotone, mtn, git, perforce)

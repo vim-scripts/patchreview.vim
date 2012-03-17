@@ -1,9 +1,0 @@
-:DiffReview	patchreview.txt	/*:DiffReview*
-:PatchReview	patchreview.txt	/*:PatchReview*
-diffreview	patchreview.txt	/*diffreview*
-patchreview	patchreview.txt	/*patchreview*
-patchreview-contents	patchreview.txt	/*patchreview-contents*
-patchreview-intro	patchreview.txt	/*patchreview-intro*
-patchreview-options	patchreview.txt	/*patchreview-options*
-patchreview-usage	patchreview.txt	/*patchreview-usage*
-patchreview.txt	patchreview.txt	/*patchreview.txt*
