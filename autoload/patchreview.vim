@@ -1,13 +1,18 @@
 " VIM plugin for doing single, multi-patch or diff code reviews             {{{
 " Home:  http://www.vim.org/scripts/script.php?script_id=1563
 
-" Version       : 1.0.1                                                     {{{
+" Version       : 1.0.2                                                     {{{
 " Author        : Manpreet Singh < junkblocker@yahoo.com >
 " Copyright     : 2006-2012 by Manpreet Singh
 " License       : This file is placed in the public domain.
 "                 No warranties express or implied. Use at your own risk.
 "
 " Changelog :
+"
+"   1.0.2 - Fix for system's patch command on BSDs.
+"         - Better exception handling
+"
+"   1.0.1 - Set foldmethod to diff for patched buffers
 "
 "   1.0 - Added Perforce support
 "       - Add support for arbitrary diff generation commands
@@ -287,6 +292,9 @@ function! <SID>TempName()
 endfunction
 
 function! <SID>GetPatchFileLines(patchfile)
+  "
+  " Throws: "File " . a:patchfile . " is not readable"
+  "
   let l:patchfile = expand(a:patchfile, ":p")
   if ! filereadable(expand(l:patchfile))
     throw "File " . l:patchfile . " is not readable"
@@ -653,8 +661,12 @@ function! patchreview#PatchReview(...)                                     "{{{
   set shortmess=aW
   call s:WipeMsgBuf()
   let s:reviewmode = 'patch'
-  let l:lines = s:GetPatchFileLines(a:1)
-  call s:_GenericReview([l:lines] + a:000[1:])
+  try
+    let l:lines = s:GetPatchFileLines(a:1)
+    call s:_GenericReview([l:lines] + a:000[1:])
+  catch /.*/
+    call s:me.Echo('ERROR: ' . v:exception)
+  endtry
   let &eadirection = s:eadirection
   let &equalalways = s:equalalways
   let &autowriteall = s:save_awa
@@ -689,8 +701,12 @@ function! patchreview#ReversePatchReview(...)  "{{{
   set shortmess=aW
   call s:WipeMsgBuf()
   let s:reviewmode = 'rpatch'
-  let l:lines = s:GetPatchFileLines(a:1)
-  call s:_GenericReview([l:lines] + a:000[1:])
+  try
+    let l:lines = s:GetPatchFileLines(a:1)
+    call s:_GenericReview([l:lines] + a:000[1:])
+  catch /.*/
+    call s:me.Echo('ERROR: ' . v:exception)
+  endtry
   let &eadirection = s:eadirection
   let &equalalways = s:equalalways
   let &autowriteall = s:save_awa
@@ -912,19 +928,41 @@ function! <SID>_GenericReview(argslist)                                   "{{{
       "endif
       if patch.type == '+' && s:reviewmode =~ 'patch'
         let l:inputfile = ''
-        let l:patchcmd = g:patchreview_patch . ' '
-              \ . join(map(['--binary', '-s', '-o', l:tmp_patched]
-              \ + patch_R_options + [l:inputfile],
-              \ "shellescape(v:val)"), ' ') . ' < ' . shellescape(l:tmp_patch)
+        if filereadable('/etc/rc.conf')
+          " BSD patch is not GNU patch but works just fine without the
+          " unavailable --binary option
+          let l:patchcmd = g:patchreview_patch . ' '
+                \ . join(map(['-s', '-o', l:tmp_patched]
+                \ + patch_R_options + [l:inputfile],
+                \ "shellescape(v:val)"), ' ') . ' < '
+                \ . shellescape(l:tmp_patch)
+        else
+          let l:patchcmd = g:patchreview_patch . ' '
+                \ . join(map(['--binary', '-s', '-o', l:tmp_patched]
+                \ + patch_R_options + [l:inputfile],
+                \ "shellescape(v:val)"), ' ') . ' < '
+                \ . shellescape(l:tmp_patch)
+        endif
       elseif patch.type == '+' && s:reviewmode == 'diff'
         let l:inputfile = ''
         unlet! l:patchcmd
       else
         let l:inputfile = expand(l:stripped_rel_path, ':p')
-        let l:patchcmd = g:patchreview_patch . ' '
-              \ . join(map(['--binary', '-s', '-o', l:tmp_patched]
-              \ + patch_R_options + [l:inputfile],
-              \ "shellescape(v:val)"), ' ') . ' < ' . shellescape(l:tmp_patch)
+        if filereadable('/etc/rc.conf')
+          " BSD patch is not GNU patch but works just fine without the
+          " unavailable --binary option
+          let l:patchcmd = g:patchreview_patch . ' '
+                \ . join(map(['-s', '-o', l:tmp_patched]
+                \ + patch_R_options + [l:inputfile],
+                \ "shellescape(v:val)"), ' ') . ' < '
+                \ . shellescape(l:tmp_patch)
+        else
+          let l:patchcmd = g:patchreview_patch . ' '
+                \ . join(map(['--binary', '-s', '-o', l:tmp_patched]
+                \ + patch_R_options + [l:inputfile],
+                \ "shellescape(v:val)"), ' ') . ' < '
+                \ . shellescape(l:tmp_patch)
+        endif
       endif
       let error = 0
       if exists('l:patchcmd')
@@ -1147,4 +1185,4 @@ endfunction
 "}}}
 
 " modeline
-" vim: set et fdl=4 fdm=marker fenc=utf-8 ff=unix ft=vim sts=0 sw=2 ts=2 tw=79 nowrap :
+" vim: set et fdl=4 fdm=marker fenc= ff=unix ft=vim sts=0 sw=2 ts=2 tw=79 nowrap :
