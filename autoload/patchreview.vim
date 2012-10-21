@@ -1,13 +1,16 @@
 " VIM plugin for doing single, multi-patch or diff code reviews             {{{
 " Home:  http://www.vim.org/scripts/script.php?script_id=1563
 
-" Version       : 1.0.4                                                     {{{
+" Version       : 1.0.5                                                     {{{
 " Author        : Manpreet Singh < junkblocker@yahoo.com >
 " Copyright     : 2006-2012 by Manpreet Singh
 " License       : This file is placed in the public domain.
 "                 No warranties express or implied. Use at your own risk.
 "
 " Changelog :
+"
+"   1.0.5 - Fixed context format patch handling
+"           minor *BSD detection improvement
 "
 "   1.0.4 - patchreview was broken in vim 7.2
 "
@@ -442,11 +445,11 @@ function! <SID>ExtractDiffs(lines, default_strip_count)               "{{{
         continue
       endif
       let l:collect += [l:line]
-      PRState 'SKIP_CONTEXT_STUFF_1'
+      PRState 'READ_TILL_CONTEXT_FRAGMENT_2'
       continue
       " }}}
-    elseif s:PRState() == 'SKIP_CONTEXT_STUFF_1' " {{{
-      if l:line !~ '^[ !+].*$'
+    elseif s:PRState() == 'READ_TILL_CONTEXT_FRAGMENT_2' " {{{
+      if l:line !~ '^[ !+-] .*$'
         let l:mat = matchlist(l:line, '^--- \(\d\+\),\(\d\+\) ----$')
         if ! empty(l:mat) && l:mat[1] != '' && l:mat[2] != ''
           let goal_count = l:mat[2] - l:mat[1] + 1
@@ -469,11 +472,17 @@ function! <SID>ExtractDiffs(lines, default_strip_count)               "{{{
         PRState 'BACKSLASH_OR_CRANGE_EOF'
         continue
       else " goal not met yet
-        let l:mat = matchlist(l:line, '^\([\\!+ ]\).*$')
+        let l:mat = matchlist(l:line, '^\([\\!+ -]\) .*$')
         if empty(l:mat) || l:mat[1] == ''
-          let l:line_num -= 1
-          PRState 'START'
-          continue
+          if l:line =~ '^\*\{15}$'
+            let l:collect += [l:line]
+            PRState 'EXPECT_CONTEXT_CHUNK_HEADER_1'
+            continue
+          else
+            let l:line_num -= 1
+            PRState 'START'
+            continue
+          endif
         endif
         let l:collect += [l:line]
         continue
