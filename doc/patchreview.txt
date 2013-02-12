@@ -1,8 +1,8 @@
 *patchreview.txt* Vim global plugin for doing single, multi-patch or diff code reviews
-                    Version 1.0.5 (for Vim version 7.0 or higher)
+                    Version 1.0.6 (for Vim version 7.0 or higher)
 
                 Author: Manpreet Singh < junkblocker@yahoo.com >
-                   Copyright (C) 2006-2011 by Manpreet Singh
+                   Copyright (C) 2006-2013 by Manpreet Singh
               License : This file is placed in the public domain.
 
 =============================================================================
@@ -132,6 +132,22 @@ PatchReview Options                                     *patchreview-options*
 <
         (On *nix systems) >
            let g:patchreview_patch = '/usr/bin/gpatch'
+<
+
+                                               *g:patchreview_unified_rejects*
+                                                 *patchreview_unified_rejects*
+  g:patchreview_unified_rejects = {0|1}
+      Usually, the patch utility generates context format reject files (.rej).
+      These can be a bit hard to read. So, we try to automatically convert
+      these to the unified format. You can set this option to 0 to disable this
+      behavior.
+
+      NOTE: Converting to unified format requires the filterdiff utility
+      installed on the PATH. filterdiff can be installed via the patchutils
+      package for your platform.
+
+    Example:
+        let g:patchreview_unified_rejects = 1
 <
 Hooks                                                       *patchreview-hooks*
 
