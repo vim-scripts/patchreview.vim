@@ -10,4 +10,4 @@ It also does not pollute the workspace like :diffpatch does by writing files in 
 
 It does automatic diff generation for various version control systems by running their respective diff commands.
 
-(Keywords: codereview, codereviews, code review, patch, patchutils, diff, diffpatch, patchreview, patchreviews, patch review, vcs, scm, mercurial, bazaar, hg, bzr, cvs, monotone, mtn, git, perforce)
+(Keywords: codereview, codereviews, code review, patch, patchutils, diff, diffpatch, patchreview, patchreviews, patch review, vcs, scm, mercurial, bazaar, hg, bzr, cvs, monotone, mtn, git, perforce, fossil)
