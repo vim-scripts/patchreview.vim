@@ -1,13 +1,20 @@
 " VIM plugin for doing single, multi-patch or diff code reviews             {{{
 " Home:  http://www.vim.org/scripts/script.php?script_id=1563
 
-" Version       : 1.0.7                                                     {{{
+" Version       : 1.0.8                                                     {{{
 " Author        : Manpreet Singh < junkblocker@yahoo.com >
 " Copyright     : 2006-2013 by Manpreet Singh
 " License       : This file is placed in the public domain.
 "                 No warranties express or implied. Use at your own risk.
 "
 " Changelog : {{{
+"
+"   1.0.8 - Fix embarassing breakage
+"         - Ensure folds are closed at diff creation
+          - Make string truncation wide character aware for vim older than 7.3
+          - Minor code style change
+          - Show parse result in case of inapplicable patch
+          - Prevent empty blank line 1 in log buffer
 "
 "   1.0.7 - Added support for fossil
 "         - Internal code style changes.
@@ -87,16 +94,106 @@ let s:me = {}
 let s:modules = {}
 " }}}
 " Functions {{{
-function! s:me.progress(str)                                                 "{{{
-  if v:version >= 703
-    let l:wide = min([strlen(a:str), strdisplaywidth(a:str)])
-  else
-    let l:wide = min([strlen(a:str), &columns])
+" String display width utilities {{{
+" The string display width functions were imported from vital.vim
+" https://github.com/vim-jp/vital.vim (Public Domain)
+if exists('*strdisplaywidth')
+  " Use builtin function.
+  function! s:me.wcswidth(str) " {{{
+    return strdisplaywidth(a:str)
+  endfunction
+  " }}}
+else
+  function! s:me.wcswidth(str) " {{{
+    if a:str =~# '^[\x00-\x7f]*$'
+      return 2 * strlen(a:str)
+            \ - strlen(substitute(a:str, '[\x00-\x08\x0b-\x1f\x7f]', '', 'g'))
+    end
+
+    let l:mx_first = '^\(.\)'
+    let l:str = a:str
+    let l:width = 0
+    while 1
+      let l:ucs = char2nr(substitute(l:str, l:mx_first, '\1', ''))
+      if l:ucs == 0
+        break
+      endif
+      let l:width += s:_wcwidth(l:ucs)
+      let l:str = substitute(l:str, l:mx_first, '', '')
+    endwhile
+    return l:width
+  endfunction
+  " }}}
+  function! s:_wcwidth(ucs) " UTF-8 only. {{{
+    let l:ucs = a:ucs
+    if l:ucs > 0x7f && l:ucs <= 0xff
+      return 4
+    endif
+    if l:ucs <= 0x08 || 0x0b <= l:ucs && l:ucs <= 0x1f || l:ucs == 0x7f
+      return 2
+    endif
+    if (l:ucs >= 0x1100
+          \  && (l:ucs <= 0x115f
+          \  || l:ucs == 0x2329
+          \  || l:ucs == 0x232a
+          \  || (l:ucs >= 0x2e80 && l:ucs <= 0xa4cf
+          \      && l:ucs != 0x303f)
+          \  || (l:ucs >= 0xac00 && l:ucs <= 0xd7a3)
+          \  || (l:ucs >= 0xf900 && l:ucs <= 0xfaff)
+          \  || (l:ucs >= 0xfe30 && l:ucs <= 0xfe6f)
+          \  || (l:ucs >= 0xff00 && l:ucs <= 0xff60)
+          \  || (l:ucs >= 0xffe0 && l:ucs <= 0xffe6)
+          \  || (l:ucs >= 0x20000 && l:ucs <= 0x2fffd)
+          \  || (l:ucs >= 0x30000 && l:ucs <= 0x3fffd)
+          \  ))
+      return 2
+    endif
+    return 1
+  endfunction
+  " }}}
+endif
+function! s:me.strwidthpart(str, width) " {{{
+  if a:width <= 0
+    return ''
   endif
-  echo strpart(a:str, 0, l:wide)
-  " call s:me.debug(strpart(a:str, 0, l:wide))
-  sleep 1m
+  let l:ret = a:str
+  let l:width = s:me.wcswidth(a:str)
+  while l:width > a:width
+    let char = matchstr(l:ret, '.$')
+    let l:ret = l:ret[: -1 - len(char)]
+    let l:width -= s:me.wcswidth(char)
+  endwhile
+
+  return l:ret
+endfunction
+" }}}
+function! s:me.truncate(str, width) " {{{
+  if a:str =~# '^[\x20-\x7e]*$'
+    return len(a:str) < a:width ?
+          \ printf('%-'.a:width.'s', a:str) : strpart(a:str, 0, a:width)
+  endif
+
+  let l:ret = a:str
+  let l:width = s:me.wcswidth(a:str)
+  if l:width > a:width
+    let l:ret = s:me.strwidthpart(l:ret, a:width)
+    let l:width = s:me.wcswidth(l:ret)
+  endif
+
+  if l:width < a:width
+    let l:ret .= repeat(' ', a:width - l:width)
+  endif
+
+  return l:ret
+endfunction
+" }}}
+" }}}
+function! s:me.progress(str)                                                 "{{{
+  if ! &cmdheight
+    return
+  endif
   redraw
+  echo s:me.truncate(a:str, &columns * min([&cmdheight, 1]) - 1)
 endfunction
 " }}}
 function! s:me.debug(str)                                                  "{{{
@@ -154,10 +251,16 @@ function! s:me.buflog(...)                                                   "{{
     setlocal noswapfile
     setlocal nowrap
     setlocal nobuflisted
+    let b:just_created = 1
   endif
   setlocal modifiable
   if a:0 != 0
     silent! $put =a:1
+    if get(b:, 'just_created', 0)
+      normal! gg
+      0 delete _
+      let b:just_created = 0
+    endif
   endif
   normal! G
   setlocal nomodifiable
@@ -170,19 +273,19 @@ function! s:me.buflog(...)                                                   "{{
   endif
 endfunction
 "}}}
-function! s:check_binary(BinaryName)                                 "{{{
-  " Verify that BinaryName is specified or available
-  if ! exists('g:patchreview_' . a:BinaryName)
-    if executable(a:BinaryName)
-      let g:patchreview_{a:BinaryName} = a:BinaryName
+function! s:check_binary(binary_name)                                 "{{{
+  " Verify that binary_name is specified or available
+  if ! exists('g:patchreview_' . a:binary_name)
+    if executable(a:binary_name)
+      let g:patchreview_{a:binary_name} = a:binary_name
       return 1
     else
-      call s:me.buflog('g:patchreview_' . a:BinaryName . ' is not defined and ' . a:BinaryName . ' command could not be found on path.')
+      call s:me.buflog('g:patchreview_' . a:binary_name . ' is not defined and ' . a:binary_name . ' command could not be found on path.')
       call s:me.buflog('Please define it in your .vimrc.')
       return 0
     endif
-  elseif ! executable(g:patchreview_{a:BinaryName})
-    call s:me.buflog('Specified g:patchreview_' . a:BinaryName . ' [' . g:patchreview_{a:BinaryName} . '] is not executable.')
+  elseif ! executable(g:patchreview_{a:binary_name})
+    call s:me.buflog('Specified g:patchreview_' . a:binary_name . ' [' . g:patchreview_{a:binary_name} . '] is not executable.')
     return 0
   else
     return 1
@@ -213,7 +316,7 @@ function! s:guess_prefix_strip_value(diff_file_path, default_strip) " {{{
   let s:guess_strip[a:default_strip] += 1
 endfunction
 " }}}
-function! s:state(...)  " For easy manipulation of diff parsing state "{{{
+function! s:state(...)  " For easy manipulation of diff parsing state {{{
   if a:0 != 0
     let s:PARSE_STATE = a:1
     " call s:me.debug('Set PARSE_STATE: ' . a:1)
@@ -371,7 +474,7 @@ function! s:extract_diffs(lines, default_strip_count)                       "{{{
         endif
       endif
       call s:me.progress('Collecting ' . l:filepath)
-      PRState 'EXPECT_15_STARS'
+      call s:state('EXPECT_15_STARS')
       let l:collect += [l:line]
       " }}}
     elseif s:state() == 'EXPECT_15_STARS' " {{{
@@ -380,7 +483,7 @@ function! s:extract_diffs(lines, default_strip_count)                       "{{{
         let l:line_num -= 1
         continue
       endif
-      PRState 'EXPECT_CONTEXT_CHUNK_HEADER_1'
+      call s:state('EXPECT_CONTEXT_CHUNK_HEADER_1')
       let l:collect += [l:line]
       " }}}
     elseif s:state() == 'EXPECT_CONTEXT_CHUNK_HEADER_1' " {{{
@@ -391,7 +494,7 @@ function! s:extract_diffs(lines, default_strip_count)                       "{{{
         continue
       endif
       let l:collect += [l:line]
-      PRState 'READ_TILL_CONTEXT_FRAGMENT_2'
+      call s:state('READ_TILL_CONTEXT_FRAGMENT_2')
       continue
       " }}}
     elseif s:state() == 'READ_TILL_CONTEXT_FRAGMENT_2' " {{{
@@ -422,7 +525,7 @@ function! s:extract_diffs(lines, default_strip_count)                       "{{{
         if empty(l:mat) || l:mat[1] == ''
           if l:line =~ '^\*\{15}$'
             let l:collect += [l:line]
-            PRState 'EXPECT_CONTEXT_CHUNK_HEADER_1'
+            call s:state('EXPECT_CONTEXT_CHUNK_HEADER_1')
             continue
           else
             let l:line_num -= 1
@@ -452,7 +555,7 @@ function! s:extract_diffs(lines, default_strip_count)                       "{{{
       endif
       if l:line =~ '^\*\{15}$'
         let l:collect += [l:line]
-        PRState 'EXPECT_CONTEXT_CHUNK_HEADER_1'
+        call s:state('EXPECT_CONTEXT_CHUNK_HEADER_1')
         continue
       endif
       let l:this_patch = {'filename': l:filepath, 'type':  l:p_type, 'content':  l:collect}
@@ -926,10 +1029,12 @@ function! s:generic_review(argslist)                                   "{{{
         endif
       endif
       let error = 0
+      let l:pout = ''
       if exists('l:patchcmd')
         let v:errmsg = ''
         let l:pout = system(l:patchcmd)
         if v:errmsg != '' || v:shell_error
+          let l:errmsg = v:errmsg
           let error = 1
           call s:me.buflog('ERROR: Could not execute patch command.')
           call s:me.buflog('ERROR:     ' . l:patchcmd)
@@ -948,6 +1053,16 @@ function! s:generic_review(argslist)                                   "{{{
         "silent! exe 'edit ' . l:stripped_rel_path
       "else
         silent! exe 'tabedit ' . fnameescape(l:stripped_rel_path)
+        if filereadable(l:tmp_patched) && l:pout =~ 'Only garbage was found in the patch input'
+          topleft new
+          exe 'r ' . fnameescape(l:tmp_patch)
+          normal! gg
+          0 delete _
+          exe 'file bad_patch_for_' . fnameescape(fnamemodify(l:inputfile, ':t'))
+          setlocal nomodifiable nomodified ft=diff bufhidden=delete
+                \ buftype=nofile noswapfile nowrap nobuflisted
+          wincmd p
+        endif
       "endif
       let l:winnum = winnr()
       if ! error || filereadable(l:tmp_patched)
@@ -970,12 +1085,14 @@ function! s:generic_review(argslist)                                   "{{{
           endif
           let &filetype = l:filetype
           let &fdm = 'diff'
+          normal! zM
           wincmd p
           let &modeline=s:keep_modeline
         else
           silent! vnew
           let &filetype = l:filetype
           let &fdm = 'diff'
+          normal! zM
           wincmd p
         endif
       endif
