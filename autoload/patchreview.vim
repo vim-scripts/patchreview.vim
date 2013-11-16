@@ -1,13 +1,16 @@
 " VIM plugin for doing single, multi-patch or diff code reviews             {{{
 " Home:  http://www.vim.org/scripts/script.php?script_id=1563
 
-" Version       : 1.0.9                                                     {{{
+" Version       : 1.1.0                                                     {{{
 " Author        : Manpreet Singh < junkblocker@yahoo.com >
 " Copyright     : 2006-2013 by Manpreet Singh
 " License       : This file is placed in the public domain.
 "                 No warranties express or implied. Use at your own risk.
 "
 " Changelog : {{{
+"
+"   1.1.0 - Added option to open diffs on the right
+"         - Added some basic tests (internal)
 "
 "   1.0.9 - Commented lines left uncommented
 "
@@ -92,6 +95,10 @@ endif
 let s:msgbufname = '--PatchReview_Messages--'
 
 let s:me = {}
+
+let s:vsplit = get(g:, 'patchreview_split_right', 0)
+      \ ? 'vertical rightbelow'
+      \ : 'vertical leftabove'
 
 let s:modules = {}
 " }}}
@@ -353,7 +360,7 @@ function! s:temp_name()                                                  "{{{
   return l:temp_file_name
 endfunction
 " }}}
-function! s:get_patchfile_lines(patchfile)                                  " {{{
+function! patchreview#get_patchfile_lines(patchfile)                      " {{{
   "
   " Throws: "File " . a:patchfile . " is not readable"
   "
@@ -382,7 +389,7 @@ function! s:me.generate_diff(shell_escaped_cmd)                            "{{{
   return l:diff
 endfunction
 " }}}
-function! s:extract_diffs(lines, default_strip_count)                       "{{{
+function! patchreview#extract_diffs(lines, default_strip_count)            "{{{
   " Sets g:patches = {'fail':'', 'patch':[
   " {
   "  'filename': filepath
@@ -729,7 +736,7 @@ function! patchreview#patchreview(...)                                     "{{{
   call s:wipe_message_buffer()
   let s:reviewmode = 'patch'
   try
-    let l:lines = s:get_patchfile_lines(a:1)
+    let l:lines = patchreview#get_patchfile_lines(a:1)
     call s:generic_review([l:lines] + a:000[1:])
   catch /.*/
     call s:me.buflog('ERROR: ' . v:exception)
@@ -768,7 +775,7 @@ function! patchreview#reverse_patchreview(...)  "{{{
   call s:wipe_message_buffer()
   let s:reviewmode = 'rpatch'
   try
-    let l:lines = s:get_patchfile_lines(a:1)
+    let l:lines = patchreview#get_patchfile_lines(a:1)
     call s:generic_review([l:lines] + a:000[1:])
   catch /.*/
     call s:me.buflog('ERROR: ' . v:exception)
@@ -801,7 +808,7 @@ function! s:wiggle(out, rej) " {{{
     " modelines in loaded files mess with diff comparison
     let s:keep_modeline=&modeline
     let &modeline=0
-    silent! exe 'vert diffsplit ' . fnameescape(l:wiggle_out)
+    silent! exe s:vsplit . ' diffsplit ' . fnameescape(l:wiggle_out)
     setlocal noswapfile
     setlocal syntax=none
     setlocal bufhidden=delete
@@ -814,7 +821,7 @@ function! s:wiggle(out, rej) " {{{
       silent! 0f
     endif
     let &modeline=s:keep_modeline
-    wincmd w
+    wincmd p
   endif
 endfunction
 " }}}
@@ -911,7 +918,7 @@ function! s:generic_review(argslist)                                   "{{{
     call s:me.buflog('Fatal internal error in patchreview.vim plugin')
   endif
   try
-    call s:extract_diffs(l:patchlines, l:defsc)
+    call patchreview#extract_diffs(l:patchlines, l:defsc)
   catch
     call s:me.buflog('Exception ' . v:exception)
     call s:me.buflog('From ' . v:throwpoint)
@@ -1073,7 +1080,7 @@ function! s:generic_review(argslist)                                   "{{{
           " modelines in loaded files mess with diff comparison
           let s:keep_modeline=&modeline
           let &modeline=0
-          silent! exe 'vert diffsplit ' . fnameescape(l:tmp_patched)
+          silent! exe s:vsplit . ' diffsplit ' . fnameescape(l:tmp_patched)
           setlocal noswapfile
           setlocal syntax=none
           setlocal bufhidden=delete
@@ -1091,7 +1098,7 @@ function! s:generic_review(argslist)                                   "{{{
           wincmd p
           let &modeline=s:keep_modeline
         else
-          silent! vnew
+          silent! exe s:vsplit . ' new'
           let &filetype = l:filetype
           let &fdm = 'diff'
           normal! zM
@@ -1231,7 +1238,7 @@ function! patchreview#diff_review(...) " {{{
         return
       endif
       let s:reviewmode = 'diff'
-      let l:lines = s:get_patchfile_lines(l:outfile)
+      let l:lines = patchreview#get_patchfile_lines(l:outfile)
       call s:generic_review([l:lines, l:strip_count])
     else  " :DiffReview
       call s:init_diff_modules()
