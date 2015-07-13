@@ -1,13 +1,16 @@
 " VIM plugin for doing single, multi-patch or diff code reviews             {{{
 " Home:  http://www.vim.org/scripts/script.php?script_id=1563
 
-" Version       : 1.2.0                                                     {{{
+" Version       : 1.2.1                                                     {{{
 " Author        : Manpreet Singh < junkblocker@yahoo.com >
-" Copyright     : 2006-2014 by Manpreet Singh
+" Copyright     : 2006-2015 by Manpreet Singh
 " License       : This file is placed in the public domain.
 "                 No warranties express or implied. Use at your own risk.
 "
 " Changelog : {{{
+"
+"   1.2.1 - Added pathogen instructions (Daniel Lobato García)
+"           Fixed subversion support (wilywampa, Michael Leuchtenburg)
 "
 "   1.2.0 - Support # prefixed comment lines in patches
 "           Better FreeBSD detection
@@ -727,8 +730,9 @@ function! patchreview#extract_diffs(lines, default_strip_count)            "{{{
 endfunction
 "}}}
 function! patchreview#patchreview(...)                                     "{{{
+  let l:callback_args = ['Patch Review'] + deepcopy(a:000)
   if exists('g:patchreview_prefunc')
-    call call(g:patchreview_prefunc, ['Patch Review'])
+    call call(g:patchreview_prefunc, l:callback_args)
   endif
   augroup patchreview_plugin
     autocmd!
@@ -761,13 +765,14 @@ function! patchreview#patchreview(...)                                     "{{{
   let &shortmess = s:save_shortmess
   augroup! patchreview_plugin
   if exists('g:patchreview_postfunc')
-    call call(g:patchreview_postfunc, ['Patch Review'])
+    call call(g:patchreview_postfunc, l:callback_args)
   endif
 endfunction
 "}}}
 function! patchreview#reverse_patchreview(...)  "{{{
+  let l:callback_args = ['Reverse Patch Review'] + deepcopy(a:000)
   if exists('g:patchreview_prefunc')
-    call call(g:patchreview_prefunc, ['Reverse Patch Review'])
+    call call(g:patchreview_prefunc, l:callback_args)
   endif
   augroup patchreview_plugin
     autocmd!
@@ -800,7 +805,7 @@ function! patchreview#reverse_patchreview(...)  "{{{
   let &shortmess = s:save_shortmess
   augroup! patchreview_plugin
   if exists('g:patchreview_postfunc')
-    call call(g:patchreview_postfunc, ['Reverse Patch Review'])
+    call call(g:patchreview_postfunc, l:callback_args)
   endif
 endfunction
 "}}}
@@ -1198,8 +1203,9 @@ function! s:generic_review(argslist)                                   "{{{
 endfunction
 "}}}
 function! patchreview#diff_review(...) " {{{
+  let l:callback_args = ['Diff Review'] + deepcopy(a:000)
   if exists('g:patchreview_prefunc')
-    call call(g:patchreview_prefunc, ['Diff Review'])
+    call call(g:patchreview_prefunc, l:callback_args)
   endif
   augroup patchreview_plugin
     autocmd!
@@ -1283,7 +1289,7 @@ function! patchreview#diff_review(...) " {{{
     augroup! patchreview_plugin
   endtry
   if exists('g:patchreview_postfunc')
-    call call(g:patchreview_postfunc, ['Diff Review'])
+    call call(g:patchreview_postfunc, l:callback_args)
   endif
 endfunction
 "}}}
